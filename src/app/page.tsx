@@ -21,6 +21,7 @@ import type {
   ItemAcervo,
   LocalCenario,
   PessoaCenario,
+  TramaCenario,
 } from "@/types/cenario";
 
 type Guia = "trama" | "mapa" | "personagens" | "acervo";
@@ -106,6 +107,38 @@ type PessoaSalvaParcial = Partial<PessoaCenario> & {
   derivados?: Partial<PessoaCenario["derivados"]>;
 };
 
+interface EntradaTramaJson {
+  titulo: string;
+  descricao?: string;
+  revelado?: boolean;
+}
+
+function validarEntradaTrama(valor: unknown): valor is Record<string, unknown> & EntradaTramaJson {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return false;
+  const entrada = valor as Record<string, unknown>;
+  return (
+    typeof entrada.titulo === "string" &&
+    entrada.titulo.trim().length > 0 &&
+    (entrada.descricao === undefined || typeof entrada.descricao === "string") &&
+    (entrada.revelado === undefined || typeof entrada.revelado === "boolean")
+  );
+}
+
+function extrairTramasJson(valor: unknown): EntradaTramaJson[] | null {
+  let entradas: unknown[] | null = Array.isArray(valor) ? valor : null;
+  if (!entradas && valor && typeof valor === "object" && !Array.isArray(valor)) {
+    const lista = (valor as Record<string, unknown>).tramas;
+    if (Array.isArray(lista)) entradas = lista;
+  }
+  if (!entradas) return null;
+  const entradasValidadas: EntradaTramaJson[] = [];
+  for (const entrada of entradas) {
+    if (!validarEntradaTrama(entrada)) return null;
+    entradasValidadas.push(entrada);
+  }
+  return entradasValidadas;
+}
+
 function mesclarPessoaSalva(base: PessoaCenario, pessoaSalva: unknown): PessoaCenario {
   if (!pessoaSalva || typeof pessoaSalva !== "object") return base;
   const salva = pessoaSalva as PessoaSalvaParcial;
@@ -136,6 +169,7 @@ function migrarEstadoSalvo(dados: Partial<EstadoCenario>): EstadoCenario {
   return {
     ...estadoInicial,
     ...dados,
+    tramas: Array.isArray(dados.tramas) ? dados.tramas : estadoInicial.tramas,
     locais: [
       ...estadoInicial.locais.map((base) => {
         const salvo = locaisSalvos.find((local) => local.id === base.id);
@@ -226,6 +260,11 @@ export default function Home() {
   const [editando, setEditando] = useState<string | null>(null);
   const [rascunhoPessoa, setRascunhoPessoa] = useState<PessoaCenario | null>(null);
   const [edicaoFicha, setEdicaoFicha] = useState(false);
+  const [rascunhoTrama, setRascunhoTrama] = useState<{
+    id: string | null;
+    titulo: string;
+    descricao: string;
+  } | null>(null);
   const [adicionandoItem, setAdicionandoItem] = useState(false);
   const [novoItem, setNovoItem] = useState({
     titulo: "",
@@ -281,6 +320,10 @@ export default function Home() {
   const locaisVisiveis = useMemo(
     () => estado.locais.filter((local) => modoMestre || local.revelado),
     [estado.locais, modoMestre],
+  );
+  const tramasVisiveis = useMemo(
+    () => estado.tramas.filter((trama) => modoMestre || trama.revelado),
+    [estado.tramas, modoMestre],
   );
   const personagemAtivo =
     perfil === "jogador"
@@ -470,6 +513,7 @@ export default function Home() {
     try {
       window.localStorage.setItem(chavePerfil, novoPerfil);
       window.dispatchEvent(new Event("estancia:perfil"));
+      if (novoPerfil === "jogador") setRascunhoTrama(null);
       setErroPerfil("");
     } catch {
       setErroPerfil("Não foi possível salvar o perfil neste navegador.");
@@ -550,6 +594,124 @@ export default function Home() {
     }));
   }
 
+  function iniciarNovaTrama() {
+    if (!modoMestre) return;
+    setRascunhoTrama({ id: null, titulo: "", descricao: "" });
+  }
+
+  function editarTrama(trama: TramaCenario) {
+    if (!modoMestre) return;
+    setRascunhoTrama({
+      id: trama.id,
+      titulo: trama.titulo,
+      descricao: trama.descricao,
+    });
+  }
+
+  function salvarTrama(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault();
+    if (!modoMestre || !rascunhoTrama) return;
+    const titulo = rascunhoTrama.titulo.trim();
+    if (!titulo) {
+      setAviso("Informe um título para a trama.");
+      return;
+    }
+
+    const tramaSalva: TramaCenario = {
+      id: rascunhoTrama.id ?? `trama-${window.crypto.randomUUID()}`,
+      titulo,
+      descricao: rascunhoTrama.descricao.trim(),
+      revelado: rascunhoTrama.id
+        ? estado.tramas.find((trama) => trama.id === rascunhoTrama.id)?.revelado ?? false
+        : false,
+    };
+    atualizarEstado((atual) => ({
+      ...atual,
+      tramas: rascunhoTrama.id
+        ? atual.tramas.map((trama) =>
+            trama.id === tramaSalva.id ? tramaSalva : trama,
+          )
+        : [...atual.tramas, tramaSalva],
+    }));
+    setRascunhoTrama(null);
+    setAviso(rascunhoTrama.id ? "Trama atualizada." : "Trama criada e mantida oculta.");
+  }
+
+  function alternarRevelacaoTrama(id: string) {
+    if (!modoMestre) return;
+    const trama = estado.tramas.find((item) => item.id === id);
+    if (!trama) return;
+    if (trama.revelado && rascunhoTrama?.id === id) setRascunhoTrama(null);
+    atualizarEstado((atual) => ({
+      ...atual,
+      tramas: atual.tramas.map((trama) =>
+        trama.id === id ? { ...trama, revelado: !trama.revelado } : trama,
+      ),
+    }));
+  }
+
+  function removerTrama(trama: TramaCenario) {
+    if (!modoMestre || !window.confirm(`Excluir a trama “${trama.titulo}”?`)) return;
+    atualizarEstado((atual) => ({
+      ...atual,
+      tramas: atual.tramas.filter((item) => item.id !== trama.id),
+    }));
+    if (rascunhoTrama?.id === trama.id) setRascunhoTrama(null);
+    setAviso("Trama excluída.");
+  }
+
+  async function importarTramas(evento: ChangeEvent<HTMLInputElement>) {
+    const campoArquivo = evento.currentTarget;
+    const arquivo = campoArquivo.files?.[0];
+    campoArquivo.value = "";
+    if (!arquivo || !modoMestre) return;
+
+    let conteudo: string;
+    try {
+      conteudo = await arquivo.text();
+    } catch (erro) {
+      setAviso(
+        `Não foi possível ler o arquivo: ${erro instanceof Error ? erro.message : "erro desconhecido."}`,
+      );
+      return;
+    }
+
+    let dadosJson: unknown;
+    try {
+      dadosJson = JSON.parse(conteudo) as unknown;
+    } catch {
+      setAviso("O arquivo selecionado não contém um JSON válido.");
+      return;
+    }
+
+    const entradas = extrairTramasJson(dadosJson);
+    if (!entradas) {
+      setAviso(
+        'Formato inválido. Use {"tramas":[{"titulo":"...", "descricao":"...", "revelado":false}]}; "titulo" é obrigatório e os outros campos são opcionais.',
+      );
+      return;
+    }
+    if (entradas.length === 0) {
+      setAviso("O arquivo não contém tramas para importar.");
+      return;
+    }
+
+    const novasTramas: TramaCenario[] = entradas.map((entrada) => ({
+      id: `trama-${window.crypto.randomUUID()}`,
+      titulo: entrada.titulo.trim(),
+      descricao: entrada.descricao?.trim() ?? "",
+      revelado: entrada.revelado ?? false,
+    }));
+    atualizarEstado((atual) => ({
+      ...atual,
+      tramas: [...atual.tramas, ...novasTramas],
+    }));
+    const quantidade = novasTramas.length;
+    setAviso(
+      `${quantidade} ${quantidade === 1 ? "trama importada" : "tramas importadas"}. As novas entradas foram adicionadas ao final.`,
+    );
+  }
+
   function abrirFicha(pessoa: PessoaCenario, editar = modoMestre) {
     setEditando(pessoa.id);
     setRascunhoPessoa({ ...pessoa });
@@ -616,6 +778,7 @@ export default function Home() {
     setLocalSelecionado("sede");
     setGuia("trama");
     setAdicionandoItem(false);
+    setRascunhoTrama(null);
     setAviso("Estado inicial restaurado.");
   }
 
@@ -878,22 +1041,176 @@ export default function Home() {
                     Na segunda, o fogo começa a responder.
                   </p>
                   <div className="story-separator"><span>LINHAS DE INVESTIGAÇÃO</span><i /></div>
+                  {modoMestre && (
+                    <div className="plot-manager">
+                      <div className="plot-manager-actions">
+                        <label className="plot-import-button">
+                          <span aria-hidden="true">↑</span> Importar JSON
+                          <input
+                            type="file"
+                            accept=".json,application/json"
+                            onChange={(evento) => void importarTramas(evento)}
+                          />
+                        </label>
+                        <button className="primary-button" type="button" onClick={iniciarNovaTrama}>
+                          <span>＋</span> Nova trama
+                        </button>
+                      </div>
+                      <p className="plot-json-hint">
+                        O JSON deve conter <code>{"{ \"tramas\": [{ \"titulo\": \"...\", \"descricao\": \"...\", \"revelado\": false }] }"}</code>.
+                        Importar adiciona os itens ao final; por padrão, ficam ocultos.
+                      </p>
+                    </div>
+                  )}
+                  {modoMestre && rascunhoTrama && (
+                    <form className="plot-editor" onSubmit={salvarTrama}>
+                      <div className="form-heading">
+                        <div>
+                          <p className="eyebrow">EDIÇÃO DE DOSSIÊ</p>
+                          <h3>{rascunhoTrama.id ? "Editar trama" : "Nova trama"}</h3>
+                        </div>
+                        <button
+                          className="close-button"
+                          type="button"
+                          aria-label="Cancelar edição"
+                          onClick={() => setRascunhoTrama(null)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <label className="field-label">
+                        Título
+                        <input
+                          autoFocus
+                          required
+                          value={rascunhoTrama.titulo}
+                          onChange={(evento) =>
+                            setRascunhoTrama((atual) =>
+                              atual ? { ...atual, titulo: evento.target.value } : atual,
+                            )
+                          }
+                          placeholder="Título da trama"
+                        />
+                      </label>
+                      <label className="field-label">
+                        Descrição
+                        <textarea
+                          value={rascunhoTrama.descricao}
+                          onChange={(evento) =>
+                            setRascunhoTrama((atual) =>
+                              atual ? { ...atual, descricao: evento.target.value } : atual,
+                            )
+                          }
+                          placeholder="Detalhes, pistas e acontecimentos..."
+                        />
+                      </label>
+                      <div className="plot-editor-actions">
+                        <button
+                          className="secondary-button"
+                          type="button"
+                          onClick={() => setRascunhoTrama(null)}
+                        >
+                          Cancelar
+                        </button>
+                        <button className="primary-button" type="submit">
+                          Salvar trama <span>↗</span>
+                        </button>
+                      </div>
+                    </form>
+                  )}
                   <div className="plot-axes">
-                    <article className="plot-axis">
-                      <span className="axis-index">01</span><span className="axis-symbol">⌁</span>
-                      <div><h3>Sobreviver</h3><p>Isolamento, desgaste e uma ameaça que aprende com cada incêndio.</p></div>
-                      <span className="axis-arrow">↗</span>
-                    </article>
-                    <article className="plot-axis">
-                      <span className="axis-index">02</span><span className="axis-symbol">◌</span>
-                      <div><h3>Alguém leu as páginas</h3><p>Suspeita, corrupção e a pergunta: quem abriu o que não devia?</p></div>
-                      <span className="axis-arrow">↗</span>
-                    </article>
-                    <article className="plot-axis">
-                      <span className="axis-index">03</span><span className="axis-symbol">†</span>
-                      <div><h3>Achar a faca</h3><p>Uma lâmina capaz de matar demônios — se ainda estiver na propriedade.</p></div>
-                      <span className="axis-arrow">↗</span>
-                    </article>
+                    {tramasVisiveis.map((trama, index) => {
+                      const bloqueada = modoMestre && !trama.revelado;
+                      return (
+                        <article
+                          className={`plot-axis ${bloqueada ? "is-screen-hidden" : ""}`}
+                          key={trama.id}
+                        >
+                          <span className="axis-index">
+                            {bloqueada ? "••" : String(index + 1).padStart(2, "0")}
+                          </span>
+                          <span className="axis-symbol">
+                            {bloqueada ? "⊘" : ["⌁", "◌", "†"][index % 3]}
+                          </span>
+                          <div className="plot-copy">
+                            {bloqueada ? (
+                              <>
+                                <h3>Conteúdo oculto</h3>
+                                <p>Este trecho está bloqueado nesta tela.</p>
+                              </>
+                            ) : (
+                              <>
+                                <h3>{trama.titulo}</h3>
+                                {trama.descricao && <p>{trama.descricao}</p>}
+                              </>
+                            )}
+                            {modoMestre && (
+                              <span
+                                className={`plot-visibility ${trama.revelado ? "released" : "locked"}`}
+                              >
+                                {trama.revelado
+                                  ? "VISÍVEL PARA TODOS"
+                                  : "BLOQUEADO NESTA TELA"}
+                              </span>
+                            )}
+                          </div>
+                          {modoMestre ? (
+                            <div className="plot-item-actions">
+                              <button
+                                className={`plot-eye-button ${trama.revelado ? "is-visible" : ""}`}
+                                type="button"
+                                onClick={() => alternarRevelacaoTrama(trama.id)}
+                                aria-label={
+                                  trama.revelado
+                                    ? "Ocultar trama nesta tela e dos jogadores"
+                                    : "Mostrar trama nesta tela e para os jogadores"
+                                }
+                                title={
+                                  trama.revelado
+                                    ? "Bloquear nesta tela e para os jogadores"
+                                    : "Reexibir nesta tela e para os jogadores"
+                                }
+                              >
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                  <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+                                  <circle cx="12" cy="12" r="2.5" />
+                                  {!trama.revelado && <path d="M3 3 21 21" />}
+                                </svg>
+                              </button>
+                              {!bloqueada && (
+                                <>
+                                  <button
+                                    className="plot-edit-button"
+                                    type="button"
+                                    onClick={() => editarTrama(trama)}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className="plot-delete-button"
+                                    type="button"
+                                    onClick={() => removerTrama(trama)}
+                                    aria-label={`Excluir trama ${trama.titulo}`}
+                                    title="Excluir trama"
+                                  >
+                                    ×
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="axis-arrow">↗</span>
+                          )}
+                        </article>
+                      );
+                    })}
+                    {tramasVisiveis.length === 0 && (
+                      <p className="plot-empty">
+                        {modoMestre
+                          ? "Nenhuma trama cadastrada. Importe um JSON ou crie a primeira."
+                          : "Nenhuma linha de investigação foi liberada."}
+                      </p>
+                    )}
                   </div>
                   <div className="story-footnote"><span>✳</span> A chama não ilumina este lugar. Ela o reconhece.</div>
                 </div>
@@ -954,7 +1271,7 @@ export default function Home() {
                   <div className="map-canvas" role="group" aria-label="Mapa interativo da estância">
                     <Image
                       className="map-artwork"
-                      src="/mapa-estancia.jpg"
+                      src="/mapa-estancia-v2.jpg"
                       alt="Mapa ilustrado da Estância Vilar"
                       fill
                       sizes="(max-width: 820px) 100vw, 60vw"

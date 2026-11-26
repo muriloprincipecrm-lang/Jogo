@@ -57,7 +57,15 @@ export interface ItemAcervo {
   revelado: boolean;
 }
 
+export interface TramaCenario {
+  id: string;
+  titulo: string;
+  descricao: string;
+  revelado: boolean;
+}
+
 export interface EstadoCenario {
+  tramas: TramaCenario[];
   locais: LocalCenario[];
   pessoas: PessoaCenario[];
   acervo: ItemAcervo[];

@@ -24,7 +24,7 @@ pode estar conectado por um jogador de cada vez. Ao clicar em um local
 revelado, a posição do personagem é enviada aos demais clientes conectados.
 No desenvolvimento local, o serviço Socket.IO mantém a presença em memória.
 
-O mapa ilustrado usado como fundo fica em `public/mapa-estancia.jpg`. Os locais,
+O mapa ilustrado usado como fundo fica em `public/mapa-estancia-v2.jpg`. Os locais,
 os códigos impressos na arte e as coordenadas dos pontos clicáveis são definidos
 em `src/data/cenario.ts`; preserve a proporção original de 1256 × 770 ao trocar a
 imagem. A arte completa fica visível para mestres e jogadores; os controles de
@@ -64,3 +64,12 @@ Configuração opcional:
 O perfil e as fichas continuam salvos no `localStorage` de cada navegador; o
 serviço de presença não é um sistema de autenticação ou armazenamento de
 campanha.
+
+## Trama & dossiê
+
+O Mestre pode criar e editar linhas de trama e importar arquivos JSON no formato
+`{ "tramas": [{ "titulo": "Nome", "descricao": "Detalhes", "revelado": false }] }`.
+As importações são adicionadas às tramas existentes; itens começam ocultos quando
+`revelado` não é informado. O botão de olho bloqueia a trama tanto para os
+jogadores quanto na tela do Mestre, substituindo título e descrição por um aviso
+neutro durante transmissões. As alterações ficam no `localStorage` do navegador.

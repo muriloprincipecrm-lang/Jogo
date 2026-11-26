@@ -2,6 +2,29 @@ import type { EstadoCenario } from "@/types/cenario";
 import { personagensIniciais } from "@/data/characters";
 
 export const estadoInicial: EstadoCenario = {
+  tramas: [
+    {
+      id: "sobreviver",
+      titulo: "Sobreviver",
+      descricao:
+        "Isolamento, desgaste e uma ameaça que aprende com cada incêndio.",
+      revelado: true,
+    },
+    {
+      id: "paginas",
+      titulo: "Alguém leu as páginas",
+      descricao:
+        "Suspeita, corrupção e a pergunta: quem abriu o que não devia?",
+      revelado: true,
+    },
+    {
+      id: "faca",
+      titulo: "Achar a faca",
+      descricao:
+        "Uma lâmina capaz de matar demônios — se ainda estiver na propriedade.",
+      revelado: true,
+    },
+  ],
   locais: [
     {
       id: "sede",
@@ -12,8 +35,8 @@ export const estadoInicial: EstadoCenario = {
       estado: "Investigado",
       revelado: true,
       numeroMapa: "01",
-      x: 49.4,
-      y: 45.3,
+      x: 50.1,
+      y: 45.4,
     },
     {
       id: "cabana",
@@ -23,8 +46,9 @@ export const estadoInicial: EstadoCenario = {
         "Uma cabana fechada há anos, escondida depois da curva do riacho. Há marcas recentes na fechadura e fuligem no lado de dentro da chaminé.",
       estado: "Bloqueado",
       revelado: false,
-      x: 18.5,
-      y: 25.5,
+      numeroMapa: "02",
+      x: 17.6,
+      y: 25.4,
     },
     {
       id: "mata",
@@ -35,8 +59,8 @@ export const estadoInicial: EstadoCenario = {
       estado: "Perigoso",
       revelado: true,
       numeroMapa: "03",
-      x: 34.6,
-      y: 65.1,
+      x: 34.9,
+      y: 65.9,
     },
     {
       id: "galpao",
@@ -47,8 +71,8 @@ export const estadoInicial: EstadoCenario = {
       estado: "Livre",
       revelado: true,
       numeroMapa: "04",
-      x: 75.6,
-      y: 69.2,
+      x: 76.8,
+      y: 69.9,
     },
     {
       id: "porão",
@@ -59,8 +83,8 @@ export const estadoInicial: EstadoCenario = {
       estado: "Bloqueado",
       revelado: false,
       numeroMapa: "05",
-      x: 59.6,
-      y: 58.6,
+      x: 60.3,
+      y: 58.5,
     },
     {
       id: "capela",
@@ -71,8 +95,8 @@ export const estadoInicial: EstadoCenario = {
       estado: "Livre",
       revelado: false,
       numeroMapa: "06",
-      x: 84.6,
-      y: 23.3,
+      x: 86.0,
+      y: 22.5,
     },
     {
       id: "represa",
@@ -83,8 +107,8 @@ export const estadoInicial: EstadoCenario = {
       estado: "Investigado",
       revelado: true,
       numeroMapa: "07",
-      x: 25.6,
-      y: 45.3,
+      x: 25.7,
+      y: 45.2,
     },
   ],
   pessoas: personagensIniciais,
