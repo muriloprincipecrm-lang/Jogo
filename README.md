@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Estância do Fogo Frio
 
-## Getting Started
+Aplicação de apoio a uma investigação de horror, com fichas Delta Green,
+controle de revelações e presença dos personagens no mapa em tempo real.
 
-First, run the development server:
+## Executar localmente
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+O comando inicia o Next.js na porta `3000` e o serviço Socket.IO na porta
+`3001`. Para abrir a aplicação em outros dispositivos da rede local, use o
+endereço IP do computador que está executando os serviços.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Em produção, `npm run build` gera a aplicação e `npm start` inicia o Next.js e
+o serviço Socket.IO juntos.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Presença no mapa
 
-## Learn More
+Jogadores escolhem um convocado liberado no primeiro acesso. Cada personagem só
+pode estar conectado por um jogador de cada vez. Ao clicar em um local
+revelado, a posição do personagem é enviada aos demais clientes conectados.
+O estado de presença fica em memória no servidor e é removido quando o cliente
+desconecta ou o serviço reinicia.
 
-To learn more about Next.js, take a look at the following resources:
+Configuração opcional:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `SOCKET_PORT`: porta do serviço Socket.IO (padrão `3001`).
+- `SOCKET_ALLOWED_ORIGINS`: origens permitidas separadas por vírgula.
+- `NEXT_PUBLIC_SOCKET_URL`: endereço do serviço Socket.IO usado pelo navegador.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O perfil e as fichas continuam salvos no `localStorage` de cada navegador; o
+serviço de presença não é um sistema de autenticação ou armazenamento de
+campanha.
