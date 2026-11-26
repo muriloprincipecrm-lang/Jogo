@@ -30,6 +30,13 @@ const chavePersonagem = "estancia-do-fogo-personagem-v1";
 type Perfil = "mestre" | "jogador";
 type StatusSocket = "conectando" | "conectado" | "desconectado" | "erro";
 
+function usarWebSocketVercel() {
+  const transporte = process.env.NEXT_PUBLIC_PRESENCE_TRANSPORT;
+  if (transporte === "vercel") return true;
+  if (transporte === "socketio") return false;
+  return window.location.hostname.endsWith(".vercel.app");
+}
+
 interface PresencaJogador {
   socketId: string;
   personagemId: string;
@@ -279,7 +286,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!perfil || (perfil === "jogador" && !personagemIdAtivo)) return;
-    if (process.env.NEXT_PUBLIC_PRESENCE_TRANSPORT === "vercel") {
+    if (usarWebSocketVercel()) {
       let interrompido = false;
       let reconectar = true;
       let tentativas = 0;
@@ -492,7 +499,7 @@ export default function Home() {
   function selecionarLocalNoMapa(localId: string) {
     setLocalSelecionado(localId);
     if (perfil === "jogador") {
-      if (process.env.NEXT_PUBLIC_PRESENCE_TRANSPORT === "vercel") {
+      if (usarWebSocketVercel()) {
         if (webSocketRef.current?.readyState === WebSocket.OPEN) {
           webSocketRef.current.send(
             JSON.stringify({ type: "presenca:mover", localId }),
@@ -995,6 +1002,54 @@ export default function Home() {
                   ) : <div className="empty-panel">Nenhum local revelado neste mapa.</div>}
                 </aside>
               </div>
+              <section className="who-is-who" aria-labelledby="who-is-who-title">
+                <div className="who-is-who-heading">
+                  <div>
+                    <p className="eyebrow">ELENCO & PRESENÇA</p>
+                    <h2 id="who-is-who-title">Quem é quem <span>{pessoasVisiveis.length.toString().padStart(2, "0")}</span></h2>
+                  </div>
+                  <p>{presencas.length} {presencas.length === 1 ? "convocado conectado" : "convocados conectados"}</p>
+                </div>
+                <div className="who-is-who-grid">
+                  {pessoasVisiveis.map((pessoa) => {
+                    const presenca = presencas.find(
+                      (item) => item.personagemId === pessoa.id,
+                    );
+                    const nomeLocal = presenca
+                      ? locaisVisiveis.find((local) => local.id === presenca.localId)?.nome
+                      : undefined;
+                    const statusPessoa = chavesPessoa.find(
+                      (item) => item.valor === pessoa.estado,
+                    );
+                    return (
+                      <article
+                        className={`who-card ${presenca ? "online" : ""}`}
+                        key={pessoa.id}
+                      >
+                        <div className="who-card-avatar">{iniciais(pessoa.nome)}</div>
+                        <div className="who-card-copy">
+                          <div className="who-card-topline">
+                            <span>{pessoa.codigo}</span>
+                            <span className={`who-presence ${presenca ? "online" : ""}`}>
+                              <i />{presenca ? "NO MAPA" : "SEM CONEXÃO"}
+                            </span>
+                          </div>
+                          <h3>{pessoa.nome}</h3>
+                          <p>{pessoa.funcao}</p>
+                          <span className="who-card-location">
+                            {presenca ? nomeLocal ?? "Local não identificado" : "Aguardando conexão"}
+                          </span>
+                          {(modoMestre || pessoa.statusRevelado) && (
+                            <span className={`who-card-status ${statusPessoa?.classe ?? ""}`}>
+                              {pessoa.estado}
+                            </span>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
               <div className="map-footer"><span>COORDENADAS APROXIMADAS · USO INTERNO</span><span>ESTÂNCIA VILAR / SETOR SERRA</span></div>
             </section>
           )}

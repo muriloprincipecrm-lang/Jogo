@@ -35,8 +35,9 @@ limite de duração da Function, e o cliente reconecta automaticamente.
 2. Crie um banco Redis (por exemplo, pelo marketplace da Vercel com o plano
    gratuito do Upstash) e adicione `UPSTASH_REDIS_REST_URL` e
    `UPSTASH_REDIS_REST_TOKEN` às variáveis de ambiente do projeto.
-3. Configure `NEXT_PUBLIC_PRESENCE_TRANSPORT=vercel` para o ambiente de
-   produção e faça um novo deploy.
+3. Faça um novo deploy. O domínio padrão `*.vercel.app` seleciona o transporte
+   WebSocket automaticamente; para um domínio próprio, configure
+   `NEXT_PUBLIC_PRESENCE_TRANSPORT=vercel` no ambiente de produção.
 
 O endpoint WebSocket fica em `/api/presenca`. Sem as credenciais do Redis, a
 presença na Vercel retorna um erro explícito; ela não usa estado em memória
@@ -49,7 +50,8 @@ Configuração opcional:
 - `SOCKET_PORT`: porta do serviço Socket.IO (padrão `3001`).
 - `SOCKET_ALLOWED_ORIGINS`: origens permitidas separadas por vírgula.
 - `NEXT_PUBLIC_SOCKET_URL`: endereço do serviço Socket.IO usado pelo navegador.
-- `NEXT_PUBLIC_PRESENCE_TRANSPORT=vercel`: usa WebSockets da Vercel no navegador.
+- `NEXT_PUBLIC_PRESENCE_TRANSPORT=vercel`: força WebSockets da Vercel; o valor
+  `socketio` força Socket.IO. Sem valor, domínios `*.vercel.app` usam WebSocket.
 - `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`: necessários para a
   presença compartilhada na Vercel.
 
