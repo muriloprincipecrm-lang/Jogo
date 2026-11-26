@@ -222,6 +222,7 @@ export default function Home() {
   const [statusSocket, setStatusSocket] = useState<StatusSocket>("desconectado");
   const [erroSocket, setErroSocket] = useState("");
   const socketRef = useRef<Socket | null>(null);
+  const webSocketRef = useRef<WebSocket | null>(null);
   const perfil: Perfil | null =
     perfilSalvo === "mestre" || perfilSalvo === "jogador" ? perfilSalvo : null;
   const modoMestre = perfil === "mestre";
@@ -278,6 +279,122 @@ export default function Home() {
 
   useEffect(() => {
     if (!perfil || (perfil === "jogador" && !personagemIdAtivo)) return;
+    if (process.env.NEXT_PUBLIC_PRESENCE_TRANSPORT === "vercel") {
+      let interrompido = false;
+      let reconectar = true;
+      let tentativas = 0;
+      let temporizadorReconexao: number | undefined;
+      let temporizadorHeartbeat: number | undefined;
+      let conexao: WebSocket | null = null;
+      const chaveCliente = "estancia-do-fogo-presenca-cliente-v1";
+      let clientId: string;
+      try {
+        clientId =
+          window.sessionStorage.getItem(chaveCliente) ??
+          window.crypto.randomUUID();
+        window.sessionStorage.setItem(chaveCliente, clientId);
+      } catch {
+        clientId = window.crypto.randomUUID();
+      }
+
+      function conectar() {
+        if (interrompido || !reconectar) return;
+        const protocolo = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const novaConexao = new WebSocket(
+          `${protocolo}//${window.location.host}/api/presenca`,
+        );
+        conexao = novaConexao;
+        webSocketRef.current = novaConexao;
+
+        novaConexao.addEventListener("open", () => {
+          if (interrompido) {
+            novaConexao.close();
+            return;
+          }
+          setStatusSocket("conectado");
+          setErroSocket("");
+          tentativas = 0;
+          novaConexao.send(
+            JSON.stringify({
+              type: "presenca:entrar",
+              perfil,
+              personagemId: perfil === "jogador" ? personagemIdAtivo : undefined,
+              localId: "sede",
+              clientId,
+            }),
+          );
+          temporizadorHeartbeat = window.setInterval(() => {
+            if (novaConexao.readyState === WebSocket.OPEN) {
+              novaConexao.send(JSON.stringify({ type: "presenca:heartbeat" }));
+            }
+          }, 8_000);
+        });
+
+        novaConexao.addEventListener("message", (evento) => {
+          let resposta: {
+            type?: string;
+            lista?: PresencaJogador[];
+            mensagem?: string;
+            fatal?: boolean;
+          };
+          try {
+            resposta = JSON.parse(String(evento.data));
+          } catch {
+            setStatusSocket("erro");
+            setErroSocket("O servidor retornou uma mensagem de presença inválida.");
+            return;
+          }
+          if (resposta.type === "presenca:lista" && Array.isArray(resposta.lista)) {
+            setPresencas(resposta.lista);
+          } else if (resposta.type === "presenca:erro") {
+            setStatusSocket("erro");
+            setErroSocket(resposta.mensagem || "Falha ao atualizar presença.");
+            if (resposta.fatal) {
+              reconectar = false;
+              if (temporizadorHeartbeat !== undefined) {
+                window.clearInterval(temporizadorHeartbeat);
+              }
+              novaConexao.close();
+            }
+          }
+        });
+
+        novaConexao.addEventListener("error", () => {
+          setStatusSocket("erro");
+          setErroSocket("Não foi possível conectar ao WebSocket de presença da Vercel.");
+        });
+
+        novaConexao.addEventListener("close", () => {
+          if (temporizadorHeartbeat !== undefined) {
+            window.clearInterval(temporizadorHeartbeat);
+            temporizadorHeartbeat = undefined;
+          }
+          if (webSocketRef.current === novaConexao) webSocketRef.current = null;
+          if (interrompido || !reconectar) return;
+          setStatusSocket("desconectado");
+          const atraso = Math.min(1_000 * 2 ** tentativas, 30_000);
+          tentativas += 1;
+          temporizadorReconexao = window.setTimeout(
+            conectar,
+            atraso + Math.floor(Math.random() * 500),
+          );
+        });
+      }
+
+      conectar();
+      return () => {
+        interrompido = true;
+        if (temporizadorReconexao !== undefined) {
+          window.clearTimeout(temporizadorReconexao);
+        }
+        if (temporizadorHeartbeat !== undefined) {
+          window.clearInterval(temporizadorHeartbeat);
+        }
+        conexao?.close();
+        if (webSocketRef.current === conexao) webSocketRef.current = null;
+      };
+    }
+
     const urlSocket =
       process.env.NEXT_PUBLIC_SOCKET_URL ||
       `${window.location.protocol}//${window.location.hostname}:3001`;
@@ -374,8 +491,16 @@ export default function Home() {
 
   function selecionarLocalNoMapa(localId: string) {
     setLocalSelecionado(localId);
-    if (perfil === "jogador" && socketRef.current?.connected) {
-      socketRef.current.emit("presenca:mover", { localId });
+    if (perfil === "jogador") {
+      if (process.env.NEXT_PUBLIC_PRESENCE_TRANSPORT === "vercel") {
+        if (webSocketRef.current?.readyState === WebSocket.OPEN) {
+          webSocketRef.current.send(
+            JSON.stringify({ type: "presenca:mover", localId }),
+          );
+        }
+      } else if (socketRef.current?.connected) {
+        socketRef.current.emit("presenca:mover", { localId });
+      }
     }
   }
 
