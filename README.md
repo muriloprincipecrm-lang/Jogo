@@ -24,6 +24,12 @@ pode estar conectado por um jogador de cada vez. Ao clicar em um local
 revelado, a posição do personagem é enviada aos demais clientes conectados.
 No desenvolvimento local, o serviço Socket.IO mantém a presença em memória.
 
+O mapa ilustrado usado como fundo fica em `public/mapa-estancia.jpg`. Os locais,
+os códigos impressos na arte e as coordenadas dos pontos clicáveis são definidos
+em `src/data/cenario.ts`; preserve a proporção original de 1256 × 770 ao trocar a
+imagem. A arte completa fica visível para mestres e jogadores; os controles de
+revelação continuam valendo para a seleção dos pontos e seus detalhes.
+
 ### Publicar na Vercel
 
 A aplicação pode usar o suporte beta de WebSockets das Vercel Functions. Nesse

@@ -15,6 +15,7 @@ export interface LocalCenario {
   descricao: string;
   estado: EstadoLocal;
   revelado: boolean;
+  numeroMapa?: string;
   x: number;
   y: number;
 }

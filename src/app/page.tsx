@@ -9,6 +9,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import Image from "next/image";
 import { io, type Socket } from "socket.io-client";
 import { estadoInicial } from "@/data/cenario";
 import { cartasDeServico } from "@/data/cartas-de-servico";
@@ -130,11 +131,22 @@ function mesclarPessoaSalva(base: PessoaCenario, pessoaSalva: unknown): PessoaCe
 }
 
 function migrarEstadoSalvo(dados: Partial<EstadoCenario>): EstadoCenario {
+  const locaisSalvos = Array.isArray(dados.locais) ? dados.locais : [];
   const pessoasSalvas = Array.isArray(dados.pessoas) ? dados.pessoas : [];
   return {
     ...estadoInicial,
     ...dados,
-    locais: Array.isArray(dados.locais) ? dados.locais : estadoInicial.locais,
+    locais: [
+      ...estadoInicial.locais.map((base) => {
+        const salvo = locaisSalvos.find((local) => local.id === base.id);
+        return salvo
+          ? { ...base, ...salvo, x: base.x, y: base.y, numeroMapa: base.numeroMapa }
+          : base;
+      }),
+      ...locaisSalvos.filter(
+        (salvo) => !estadoInicial.locais.some((base) => base.id === salvo.id),
+      ),
+    ],
     acervo: Array.isArray(dados.acervo) ? dados.acervo : estadoInicial.acervo,
     pessoas: estadoInicial.pessoas.map((base, indice) => {
       const salva = pessoasSalvas.find((pessoa) => {
@@ -930,7 +942,7 @@ export default function Home() {
           {guia === "mapa" && (
             <section className="view-panel map-view">
               <div className="map-toolbar">
-                <div><p className="eyebrow">PLANTA ESQUEMÁTICA · ESTÂNCIA VILAR</p><h2>Território & arredores</h2></div>
+                <div><p className="eyebrow">CARTOGRAFIA ILUSTRADA · ESTÂNCIA VILAR</p><h2>Território & arredores</h2></div>
                 <div className="map-toolbar-side">
                   <div className="map-legend"><span><i className="legend-dot safe" /> Investigado</span><span><i className="legend-dot threat" /> Perigoso</span>{modoMestre && <span><i className="legend-dot hidden" /> Oculto</span>}<span className="online-count"><i /> {presencas.length} no mapa</span></div>
                   {!modoMestre && personagemAtivo && <p className="map-instruction">Você joga como <strong>{personagemAtivo.codigo}</strong> · clique no local onde está seu personagem.</p>}
@@ -938,26 +950,24 @@ export default function Home() {
                 </div>
               </div>
               <div className="map-layout">
-                <div className="map-canvas" aria-label="Mapa interativo da estância">
-                  <div className="map-grid" />
-                  <svg className="map-trails" viewBox="0 0 1000 650" preserveAspectRatio="none" aria-hidden="true">
-                    <path d="M490 310 C430 290 360 310 250 310 S190 230 170 180 M490 310 C520 350 540 410 590 400 S720 420 750 470 M490 310 C550 270 650 280 720 230 S800 190 840 170 M490 310 C460 380 460 430 590 400" />
-                    <path className="trail-secondary" d="M250 310 C270 380 250 430 250 480 M750 470 C800 440 840 390 860 340 M590 400 C610 470 650 510 700 540" />
-                  </svg>
-                  <div className="north-mark"><span>N</span><i>↑</i></div>
-                  <span className="map-label label-water">REPRESA</span>
-                  <span className="map-label label-forest">MATA FECHADA</span>
-                  <span className="map-label label-east">MORRO DO CEDRO</span>
-                  {locaisVisiveis.map((local, index) => (
+                <div className="map-canvas-scroll">
+                  <div className="map-canvas" role="group" aria-label="Mapa interativo da estância">
+                    <Image
+                      className="map-artwork"
+                      src="/mapa-estancia.jpg"
+                      alt="Mapa ilustrado da Estância Vilar"
+                      fill
+                      sizes="(max-width: 820px) 100vw, 60vw"
+                    />
+                    {locaisVisiveis.map((local) => (
                     <button
                       key={local.id}
-                      className={`map-pin ${local.estado.toLowerCase()} ${localSelecionado === local.id ? "selected" : ""}`}
+                      className={`map-pin ${local.estado.toLowerCase()} ${local.numeroMapa ? "" : "sem-numero"} ${localSelecionado === local.id ? "selected" : ""}`}
                       style={{ left: `${local.x}%`, top: `${local.y}%` }}
                       onClick={() => selecionarLocalNoMapa(local.id)}
-                      aria-label={`${local.nome}${!local.revelado ? ", oculto" : ""}`}
+                      aria-label={`${local.numeroMapa ? `Ponto ${local.numeroMapa}: ` : ""}${local.nome}${!local.revelado ? ", oculto" : ""}`}
+                      title={local.nome}
                     >
-                      <span className="pin-number">{String(index + 1).padStart(2, "0")}</span>
-                      <span className="pin-label">{local.nome}</span>
                       {presencas.filter((presenca) => presenca.localId === local.id).length > 0 && (
                         <span className="pin-occupants">
                           {presencas.filter((presenca) => presenca.localId === local.id).map((presenca) => (
@@ -967,7 +977,7 @@ export default function Home() {
                       )}
                     </button>
                   ))}
-                  <div className="map-scale"><span>0</span><i /><span>200 m</span></div>
+                  </div>
                 </div>
                 <aside className="location-panel">
                   {localAtual ? (
