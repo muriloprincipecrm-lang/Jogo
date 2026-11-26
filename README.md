@@ -26,7 +26,7 @@ No desenvolvimento local, o serviço Socket.IO mantém a presença em memória.
 
 O mapa ilustrado usado como fundo fica em `public/mapa-estancia-v2.jpg`. Os locais,
 os códigos impressos na arte e as coordenadas dos pontos clicáveis são definidos
-em `src/data/cenario.ts`; preserve a proporção original de 1256 × 770 ao trocar a
+em `src/data/cenario.ts`; preserve a proporção original de 1360 × 768 ao trocar a
 imagem. A arte completa fica visível para mestres e jogadores; os controles de
 revelação continuam valendo para a seleção dos pontos e seus detalhes.
 
@@ -73,3 +73,22 @@ As importações são adicionadas às tramas existentes; itens começam ocultos 
 `revelado` não é informado. O botão de olho bloqueia a trama tanto para os
 jogadores quanto na tela do Mestre, substituindo título e descrição por um aviso
 neutro durante transmissões. As alterações ficam no `localStorage` do navegador.
+
+## Acervo do mestre
+
+O Mestre pode adicionar e editar fotos, documentos e pistas, abrir uma
+pré-visualização e importar itens em JSON. O arquivo aceita uma lista na raiz ou
+o formato `{ "acervo": [{ "titulo": "Nome", "categoria": "Pista", "descricao": "Detalhes", "imagem": "https://...", "revelado": false }] }`.
+O título é obrigatório; categoria, descrição, imagem e visibilidade são
+opcionais (a categoria padrão é `Pista`). A imagem pode ser uma URL HTTP(S) ou
+uma imagem JPG, PNG, WEBP ou GIF em data URI. Importações são adicionadas ao
+acervo e itens começam bloqueados quando `revelado` não é informado.
+
+O botão de olho bloqueia o item para os jogadores e também oculta seus detalhes
+na tela do Mestre, substituindo-os por um cartão neutro. As alterações ficam no
+`localStorage` do navegador.
+
+O botão **Importar save point** recebe um JSON completo do estado do dossiê:
+`tramas`, `locais`, `pessoas`, `acervo`, `anotacoes`, `dia`, `tensao` e `pistas`.
+Após confirmação, substitui o estado local inteiro. O importador de itens JSON
+continua separado e adiciona somente novos itens ao Acervo.

@@ -113,6 +113,22 @@ interface EntradaTramaJson {
   revelado?: boolean;
 }
 
+interface EntradaAcervoJson {
+  titulo: string;
+  categoria?: ItemAcervo["categoria"];
+  descricao?: string;
+  imagem?: string;
+  revelado?: boolean;
+}
+
+interface RascunhoAcervo {
+  id: string | null;
+  titulo: string;
+  categoria: ItemAcervo["categoria"];
+  descricao: string;
+  imagem: string;
+}
+
 function validarEntradaTrama(valor: unknown): valor is Record<string, unknown> & EntradaTramaJson {
   if (!valor || typeof valor !== "object" || Array.isArray(valor)) return false;
   const entrada = valor as Record<string, unknown>;
@@ -137,6 +153,237 @@ function extrairTramasJson(valor: unknown): EntradaTramaJson[] | null {
     entradasValidadas.push(entrada);
   }
   return entradasValidadas;
+}
+
+function ehCategoriaAcervo(valor: unknown): valor is ItemAcervo["categoria"] {
+  return valor === "Fotografia" || valor === "Documento" || valor === "Pista";
+}
+
+function ehImagemAcervo(valor: string) {
+  if (!valor) return true;
+  if (/^data:image\/(?:jpeg|png|webp|gif);base64,/i.test(valor)) return true;
+  try {
+    const url = new URL(valor);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function validarEntradaAcervoJson(
+  valor: unknown,
+): valor is Record<string, unknown> & EntradaAcervoJson {
+  if (!valor || typeof valor !== "object" || Array.isArray(valor)) return false;
+  const entrada = valor as Record<string, unknown>;
+  return (
+    typeof entrada.titulo === "string" &&
+    entrada.titulo.trim().length > 0 &&
+    (entrada.categoria === undefined || ehCategoriaAcervo(entrada.categoria)) &&
+    (entrada.descricao === undefined || typeof entrada.descricao === "string") &&
+    (entrada.imagem === undefined ||
+      (typeof entrada.imagem === "string" && ehImagemAcervo(entrada.imagem))) &&
+    (entrada.revelado === undefined || typeof entrada.revelado === "boolean")
+  );
+}
+
+function extrairAcervoJson(valor: unknown): EntradaAcervoJson[] | null {
+  let entradas: unknown[] | null = Array.isArray(valor) ? valor : null;
+  if (!entradas && valor && typeof valor === "object" && !Array.isArray(valor)) {
+    const lista = (valor as Record<string, unknown>).acervo;
+    if (Array.isArray(lista)) entradas = lista;
+  }
+  if (!entradas) return null;
+  const entradasValidadas: EntradaAcervoJson[] = [];
+  for (const entrada of entradas) {
+    if (!validarEntradaAcervoJson(entrada)) return null;
+    entradasValidadas.push(entrada);
+  }
+  return entradasValidadas;
+}
+
+function ehRegistroJson(valor: unknown): valor is Record<string, unknown> {
+  return Boolean(valor && typeof valor === "object" && !Array.isArray(valor));
+}
+
+function ehNumeroFinito(valor: unknown): valor is number {
+  return typeof valor === "number" && Number.isFinite(valor);
+}
+
+function idsUnicos(registros: unknown[]) {
+  const ids = new Set<string>();
+  for (const registro of registros) {
+    if (!ehRegistroJson(registro) || typeof registro.id !== "string" || !registro.id) {
+      return false;
+    }
+    if (ids.has(registro.id)) return false;
+    ids.add(registro.id);
+  }
+  return true;
+}
+
+function validarTramaSavePoint(valor: unknown): valor is TramaCenario {
+  return (
+    ehRegistroJson(valor) &&
+    typeof valor.id === "string" &&
+    typeof valor.titulo === "string" &&
+    valor.titulo.trim().length > 0 &&
+    typeof valor.descricao === "string" &&
+    typeof valor.revelado === "boolean"
+  );
+}
+
+function validarLocalSavePoint(valor: unknown): valor is LocalCenario {
+  return (
+    ehRegistroJson(valor) &&
+    typeof valor.id === "string" &&
+    typeof valor.nome === "string" &&
+    valor.nome.trim().length > 0 &&
+    typeof valor.categoria === "string" &&
+    typeof valor.descricao === "string" &&
+    (valor.estado === "Livre" ||
+      valor.estado === "Investigado" ||
+      valor.estado === "Perigoso" ||
+      valor.estado === "Bloqueado") &&
+    typeof valor.revelado === "boolean" &&
+    ehNumeroFinito(valor.x) &&
+    valor.x >= 0 &&
+    valor.x <= 100 &&
+    ehNumeroFinito(valor.y) &&
+    valor.y >= 0 &&
+    valor.y <= 100 &&
+    (valor.numeroMapa === undefined || typeof valor.numeroMapa === "string")
+  );
+}
+
+function validarPessoaSavePoint(valor: unknown): valor is PessoaCenario {
+  if (!ehRegistroJson(valor)) return false;
+  const atributos = valor.atributos;
+  const derivados = valor.derivados;
+  if (!ehRegistroJson(atributos) || !ehRegistroJson(derivados)) return false;
+  const atributosDg = ["STR", "CON", "DEX", "INT", "POW", "CHA"];
+  const camposDerivados = [
+    "hpAtual",
+    "hpMaximo",
+    "wpAtual",
+    "wpMaximo",
+    "sanAtual",
+    "sanInicial",
+    "breakingPoint",
+  ];
+  const estadosValidos = [
+    "VIVO",
+    "SUSPEITO",
+    "DESAPARECIDO",
+    "FERIDO",
+    "POSSUÍDO",
+  ];
+  return (
+    typeof valor.id === "string" &&
+    valor.id.length > 0 &&
+    typeof valor.codigo === "string" &&
+    valor.codigo.length > 0 &&
+    typeof valor.nome === "string" &&
+    valor.nome.trim().length > 0 &&
+    typeof valor.funcao === "string" &&
+    typeof valor.estado === "string" &&
+    estadosValidos.includes(valor.estado) &&
+    typeof valor.notaPublica === "string" &&
+    typeof valor.segredoMestre === "string" &&
+    typeof valor.foto === "string" &&
+    ehImagemAcervo(valor.foto) &&
+    typeof valor.revelado === "boolean" &&
+    typeof valor.statusRevelado === "boolean" &&
+    typeof valor.fichaRevelada === "boolean" &&
+    atributosDg.every(
+      (campo) =>
+        ehNumeroFinito(atributos[campo]) &&
+        atributos[campo] >= 0 &&
+        atributos[campo] <= 20,
+    ) &&
+    camposDerivados.every(
+      (campo) => ehNumeroFinito(derivados[campo]) && derivados[campo] >= 0,
+    ) &&
+    Array.isArray(valor.pericias) &&
+    valor.pericias.every(
+      (pericia) =>
+        ehRegistroJson(pericia) &&
+        typeof pericia.nome === "string" &&
+        ehNumeroFinito(pericia.valor) &&
+        pericia.valor >= 0 &&
+        pericia.valor <= 100,
+    ) &&
+    Array.isArray(valor.vinculos) &&
+    valor.vinculos.every(
+      (vinculo) =>
+        ehRegistroJson(vinculo) &&
+        typeof vinculo.nome === "string" &&
+        ehNumeroFinito(vinculo.pontuacao) &&
+        vinculo.pontuacao >= 0 &&
+        vinculo.pontuacao <= 15 &&
+        typeof vinculo.danificado === "boolean",
+    ) &&
+    Array.isArray(valor.motivacoes) &&
+    valor.motivacoes.every((motivacao) => typeof motivacao === "string") &&
+    typeof valor.traumas === "string"
+  );
+}
+
+function validarItemSavePoint(valor: unknown): valor is ItemAcervo {
+  return (
+    ehRegistroJson(valor) &&
+    typeof valor.id === "string" &&
+    typeof valor.titulo === "string" &&
+    valor.titulo.trim().length > 0 &&
+    ehCategoriaAcervo(valor.categoria) &&
+    typeof valor.descricao === "string" &&
+    typeof valor.imagem === "string" &&
+    ehImagemAcervo(valor.imagem) &&
+    typeof valor.revelado === "boolean"
+  );
+}
+
+function validarSavePoint(valor: unknown): valor is EstadoCenario {
+  if (!ehRegistroJson(valor)) return false;
+  const { tramas, locais, pessoas, acervo } = valor;
+  if (
+    !Array.isArray(tramas) ||
+    !Array.isArray(locais) ||
+    !Array.isArray(pessoas) ||
+    !Array.isArray(acervo) ||
+    typeof valor.anotacoes !== "string" ||
+    !ehNumeroFinito(valor.dia) ||
+    !Number.isInteger(valor.dia) ||
+    valor.dia < 1 ||
+    valor.dia > 30 ||
+    !ehNumeroFinito(valor.tensao) ||
+    valor.tensao < 0 ||
+    valor.tensao > 10 ||
+    !ehNumeroFinito(valor.pistas) ||
+    !Number.isInteger(valor.pistas) ||
+    valor.pistas < 0 ||
+    !idsUnicos(tramas) ||
+    !idsUnicos(locais) ||
+    !idsUnicos(pessoas) ||
+    !idsUnicos(acervo) ||
+    !tramas.every(validarTramaSavePoint) ||
+    !locais.every(validarLocalSavePoint) ||
+    !pessoas.every(validarPessoaSavePoint) ||
+    !acervo.every(validarItemSavePoint)
+  ) {
+    return false;
+  }
+  const idsPessoas = new Set(
+    pessoas.filter(validarPessoaSavePoint).map((pessoa) => pessoa.id),
+  );
+  const idsPessoasIniciais = new Set(estadoInicial.pessoas.map((pessoa) => pessoa.id));
+  const idsLocais = new Set(
+    locais.filter(validarLocalSavePoint).map((local) => local.id),
+  );
+  return (
+    idsPessoas.size === idsPessoasIniciais.size &&
+    [...idsPessoasIniciais].every((id) => idsPessoas.has(id)) &&
+    estadoInicial.locais.every((local) => idsLocais.has(local.id))
+  );
 }
 
 function mesclarPessoaSalva(base: PessoaCenario, pessoaSalva: unknown): PessoaCenario {
@@ -265,13 +512,8 @@ export default function Home() {
     titulo: string;
     descricao: string;
   } | null>(null);
-  const [adicionandoItem, setAdicionandoItem] = useState(false);
-  const [novoItem, setNovoItem] = useState({
-    titulo: "",
-    categoria: "Pista" as ItemAcervo["categoria"],
-    descricao: "",
-    imagem: "",
-  });
+  const [rascunhoItem, setRascunhoItem] = useState<RascunhoAcervo | null>(null);
+  const [itemVisualizadoId, setItemVisualizadoId] = useState<string | null>(null);
   const [aviso, setAviso] = useState("");
   const [erroPerfil, setErroPerfil] = useState("");
   const [escolhendoPersonagem, setEscolhendoPersonagem] = useState(false);
@@ -336,6 +578,9 @@ export default function Home() {
     locaisVisiveis.find((local) => local.id === localSelecionado) ?? locaisVisiveis[0];
   const pessoasVisiveis = estado.pessoas.filter((pessoa) => modoMestre || pessoa.revelado);
   const itensVisiveis = estado.acervo.filter((item) => modoMestre || item.revelado);
+  const itemVisualizado = estado.acervo.find(
+    (item) => item.id === itemVisualizadoId && (modoMestre || item.revelado),
+  );
   const pessoasReveladas = estado.pessoas.filter((pessoa) => pessoa.revelado).length;
   const pistasReveladas = estado.acervo.filter((item) => item.revelado).length;
 
@@ -498,14 +743,25 @@ export default function Home() {
     return () => window.removeEventListener("keydown", fecharComEscape);
   }, [cartaPersonagemId]);
 
+  useEffect(() => {
+    if (!itemVisualizadoId) return;
+    function fecharComEscape(evento: KeyboardEvent) {
+      if (evento.key === "Escape") setItemVisualizadoId(null);
+    }
+    window.addEventListener("keydown", fecharComEscape);
+    return () => window.removeEventListener("keydown", fecharComEscape);
+  }, [itemVisualizadoId]);
+
   function atualizarEstado(atualizador: (atual: EstadoCenario) => EstadoCenario) {
     const atualizado = atualizador(estado);
-    setEstadoLido(atualizado);
     try {
       window.localStorage.setItem(chaveArmazenamento, JSON.stringify(atualizado));
+      setEstadoLido(atualizado);
       window.dispatchEvent(new Event("estancia:estado"));
+      return true;
     } catch {
       setAviso("Não foi possível salvar. O armazenamento do navegador pode estar cheio.");
+      return false;
     }
   }
 
@@ -513,7 +769,11 @@ export default function Home() {
     try {
       window.localStorage.setItem(chavePerfil, novoPerfil);
       window.dispatchEvent(new Event("estancia:perfil"));
-      if (novoPerfil === "jogador") setRascunhoTrama(null);
+      if (novoPerfil === "jogador") {
+        setRascunhoTrama(null);
+        setRascunhoItem(null);
+        setItemVisualizadoId(null);
+      }
       setErroPerfil("");
     } catch {
       setErroPerfil("Não foi possível salvar o perfil neste navegador.");
@@ -586,12 +846,34 @@ export default function Home() {
   }
 
   function alternarRevelacaoItem(id: string) {
+    if (!modoMestre) return;
+    const item = estado.acervo.find((entrada) => entrada.id === id);
+    if (!item) return;
+    if (item.revelado) {
+      if (rascunhoItem?.id === id) setRascunhoItem(null);
+      if (itemVisualizadoId === id) setItemVisualizadoId(null);
+    }
     atualizarEstado((atual) => ({
       ...atual,
       acervo: atual.acervo.map((item) =>
         item.id === id ? { ...item, revelado: !item.revelado } : item,
       ),
     }));
+  }
+
+  function removerItemAcervo(id: string) {
+    if (!modoMestre || !estado.acervo.some((item) => item.id === id)) return;
+    if (!window.confirm("Excluir este item do acervo? Esta ação não pode ser desfeita.")) {
+      return;
+    }
+    const salvo = atualizarEstado((atual) => ({
+      ...atual,
+      acervo: atual.acervo.filter((item) => item.id !== id),
+    }));
+    if (!salvo) return;
+    if (rascunhoItem?.id === id) setRascunhoItem(null);
+    if (itemVisualizadoId === id) setItemVisualizadoId(null);
+    setAviso("Item removido do acervo.");
   }
 
   function iniciarNovaTrama() {
@@ -732,17 +1014,165 @@ export default function Home() {
     setEdicaoFicha(false);
   }
 
-  function adicionarItem(evento: FormEvent<HTMLFormElement>) {
+  function iniciarNovoItem() {
+    if (!modoMestre) return;
+    setRascunhoItem({
+      id: null,
+      titulo: "",
+      categoria: "Pista",
+      descricao: "",
+      imagem: "",
+    });
+  }
+
+  function editarItem(item: ItemAcervo) {
+    if (!modoMestre || !item.revelado) return;
+    setRascunhoItem({
+      id: item.id,
+      titulo: item.titulo,
+      categoria: item.categoria,
+      descricao: item.descricao,
+      imagem: item.imagem,
+    });
+  }
+
+  function salvarItem(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
-    const item: ItemAcervo = {
-      ...novoItem,
-      id: `item-${Date.now()}`,
-      revelado: false,
+    if (!modoMestre || !rascunhoItem) return;
+    const titulo = rascunhoItem.titulo.trim();
+    if (!titulo) {
+      setAviso("Informe um título para o item do acervo.");
+      return;
+    }
+    const itemSalvo: ItemAcervo = {
+      ...rascunhoItem,
+      id: rascunhoItem.id ?? `item-${window.crypto.randomUUID()}`,
+      titulo,
+      descricao: rascunhoItem.descricao.trim(),
+      revelado: rascunhoItem.id
+        ? estado.acervo.find((item) => item.id === rascunhoItem.id)?.revelado ?? false
+        : false,
     };
-    atualizarEstado((atual) => ({ ...atual, acervo: [item, ...atual.acervo] }));
-    setNovoItem({ titulo: "", categoria: "Pista", descricao: "", imagem: "" });
-    setAdicionandoItem(false);
-    setAviso("Item adicionado oculto. Libere a visibilidade quando quiser.");
+    const salvo = atualizarEstado((atual) => ({
+      ...atual,
+      acervo: rascunhoItem.id
+        ? atual.acervo.map((item) => (item.id === itemSalvo.id ? itemSalvo : item))
+        : [itemSalvo, ...atual.acervo],
+    }));
+    if (!salvo) return;
+    setRascunhoItem(null);
+    setAviso(
+      rascunhoItem.id
+        ? "Item do acervo atualizado."
+        : "Item adicionado e bloqueado nesta tela e para os jogadores.",
+    );
+  }
+
+  async function importarAcervo(evento: ChangeEvent<HTMLInputElement>) {
+    const campoArquivo = evento.currentTarget;
+    const arquivo = campoArquivo.files?.[0];
+    campoArquivo.value = "";
+    if (!arquivo || !modoMestre) return;
+
+    let conteudo: string;
+    try {
+      conteudo = await arquivo.text();
+    } catch (erro) {
+      setAviso(
+        `Não foi possível ler o arquivo: ${erro instanceof Error ? erro.message : "erro desconhecido."}`,
+      );
+      return;
+    }
+
+    let dadosJson: unknown;
+    try {
+      dadosJson = JSON.parse(conteudo) as unknown;
+    } catch {
+      setAviso("O arquivo selecionado não contém um JSON válido.");
+      return;
+    }
+
+    const entradas = extrairAcervoJson(dadosJson);
+    if (!entradas) {
+      setAviso(
+        'Formato inválido. Use {"acervo":[{"titulo":"...", "categoria":"Pista", "descricao":"...", "imagem":"https://...", "revelado":false}]}; título é obrigatório e os outros campos são opcionais.',
+      );
+      return;
+    }
+    if (entradas.length === 0) {
+      setAviso("O arquivo não contém itens para importar.");
+      return;
+    }
+
+    const novosItens: ItemAcervo[] = entradas.map((entrada) => ({
+      id: `item-${window.crypto.randomUUID()}`,
+      titulo: entrada.titulo.trim(),
+      categoria: entrada.categoria ?? "Pista",
+      descricao: entrada.descricao?.trim() ?? "",
+      imagem: entrada.imagem ?? "",
+      revelado: entrada.revelado ?? false,
+    }));
+    const salvo = atualizarEstado((atual) => ({
+      ...atual,
+      acervo: [...novosItens, ...atual.acervo],
+    }));
+    if (!salvo) return;
+    const quantidade = novosItens.length;
+    setAviso(
+      `${quantidade} ${quantidade === 1 ? "item importado" : "itens importados"} para o acervo.`,
+    );
+  }
+
+  async function importarSavePoint(evento: ChangeEvent<HTMLInputElement>) {
+    const campoArquivo = evento.currentTarget;
+    const arquivo = campoArquivo.files?.[0];
+    campoArquivo.value = "";
+    if (!arquivo || !modoMestre) return;
+
+    let conteudo: string;
+    try {
+      conteudo = await arquivo.text();
+    } catch (erro) {
+      setAviso(
+        `Não foi possível ler o arquivo: ${erro instanceof Error ? erro.message : "erro desconhecido."}`,
+      );
+      return;
+    }
+
+    let dadosJson: unknown;
+    try {
+      dadosJson = JSON.parse(conteudo) as unknown;
+    } catch {
+      setAviso("O arquivo selecionado não contém um JSON válido.");
+      return;
+    }
+
+    if (!validarSavePoint(dadosJson)) {
+      setAviso(
+        "Save point inválido ou incompleto. O JSON precisa conter tramas, locais, pessoas, acervo, anotações, dia, tensão e pistas válidos.",
+      );
+      return;
+    }
+    if (lerPerfil() !== "mestre") {
+      setAviso("Importação cancelada: o perfil Mestre não está ativo.");
+      return;
+    }
+    if (
+      !window.confirm(
+        "Importar este save point substituirá todos os dados locais do dossiê. Deseja continuar?",
+      )
+    ) {
+      return;
+    }
+
+    const estadoImportado = migrarEstadoSalvo(dadosJson);
+    const salvo = atualizarEstado(() => estadoImportado);
+    if (!salvo) return;
+    setLocalSelecionado(estadoImportado.locais[0]?.id ?? "sede");
+    setRascunhoTrama(null);
+    setRascunhoItem(null);
+    setItemVisualizadoId(null);
+    setAviso("Save point importado. O estado local anterior foi substituído.");
   }
 
   function carregarImagem(evento: ChangeEvent<HTMLInputElement>) {
@@ -755,8 +1185,9 @@ export default function Home() {
     }
     const leitor = new FileReader();
     leitor.onload = () => {
-      if (typeof leitor.result === "string") {
-        setNovoItem((atual) => ({ ...atual, imagem: leitor.result as string }));
+      const imagem = leitor.result;
+      if (typeof imagem === "string") {
+        setRascunhoItem((atual) => (atual ? { ...atual, imagem } : atual));
         setAviso("Imagem carregada localmente.");
       }
     };
@@ -777,7 +1208,8 @@ export default function Home() {
     }
     setLocalSelecionado("sede");
     setGuia("trama");
-    setAdicionandoItem(false);
+    setRascunhoItem(null);
+    setItemVisualizadoId(null);
     setRascunhoTrama(null);
     setAviso("Estado inicial restaurado.");
   }
@@ -1421,33 +1853,269 @@ export default function Home() {
             <section className="view-panel archive-view">
               <div className="content-toolbar">
                 <div><p className="eyebrow">ANEXOS · PROVAS · MATERIAL RECUPERADO</p><h2>Acervo <span>{itensVisiveis.length.toString().padStart(2, "0")}</span></h2></div>
-                {modoMestre && <button className="primary-button" onClick={() => setAdicionandoItem((atual) => !atual)}><span>＋</span> Adicionar ao acervo</button>}
+                {modoMestre && (
+                  <div className="archive-toolbar-actions">
+                    <label className="plot-import-button">
+                      <span aria-hidden="true">↧</span> Importar save point
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={(evento) => void importarSavePoint(evento)}
+                      />
+                    </label>
+                    <label className="plot-import-button">
+                      <span aria-hidden="true">↑</span> Importar itens JSON
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={(evento) => void importarAcervo(evento)}
+                      />
+                    </label>
+                    <button className="primary-button" type="button" onClick={iniciarNovoItem}>
+                      <span>＋</span> Adicionar ao acervo
+                    </button>
+                  </div>
+                )}
               </div>
-              {modoMestre && adicionandoItem && (
-                <form className="add-item-form" onSubmit={adicionarItem}>
-                  <div className="form-heading"><div><p className="eyebrow">NOVO MATERIAL</p><h3>Registrar item</h3></div><button type="button" className="close-button" onClick={() => setAdicionandoItem(false)} aria-label="Fechar">×</button></div>
+              {modoMestre && (
+                <div className="archive-import-hints">
+                  <p className="plot-json-hint archive-json-hint">
+                    Save point completo: JSON com <code>{"{ \"tramas\": [], \"locais\": [], \"pessoas\": [], \"acervo\": [], \"anotacoes\": \"\", \"dia\": 1, \"tensao\": 0, \"pistas\": 0 }"}</code>.
+                    Substitui todo o estado local após confirmação.
+                  </p>
+                  <p className="plot-json-hint archive-json-hint">
+                    Para adicionar somente itens: <code>{"{ \"acervo\": [{ \"titulo\": \"...\", \"categoria\": \"Pista\", \"descricao\": \"...\", \"imagem\": \"https://...\", \"revelado\": false }] }"}</code>.
+                    Também aceita uma lista na raiz; novos itens ficam bloqueados por padrão.
+                  </p>
+                </div>
+              )}
+              {modoMestre && rascunhoItem && (
+                <form className="add-item-form" onSubmit={salvarItem}>
+                  <div className="form-heading">
+                    <div>
+                      <p className="eyebrow">NOVO MATERIAL</p>
+                      <h3>{rascunhoItem.id ? "Editar item" : "Registrar item"}</h3>
+                    </div>
+                    <button
+                      type="button"
+                      className="close-button"
+                      onClick={() => setRascunhoItem(null)}
+                      aria-label="Fechar edição"
+                    >
+                      ×
+                    </button>
+                  </div>
                   <div className="form-grid">
-                    <label className="field-label">Título<input required value={novoItem.titulo} onChange={(e) => setNovoItem((atual) => ({ ...atual, titulo: e.target.value }))} placeholder="Ex.: Foto no corredor norte" /></label>
-                    <label className="field-label">Tipo<select value={novoItem.categoria} onChange={(e) => setNovoItem((atual) => ({ ...atual, categoria: e.target.value as ItemAcervo["categoria"] }))}><option>Fotografia</option><option>Documento</option><option>Pista</option></select></label>
-                    <label className="field-label span-two">Descrição<textarea required value={novoItem.descricao} onChange={(e) => setNovoItem((atual) => ({ ...atual, descricao: e.target.value }))} placeholder="O que os investigadores encontram?" /></label>
-                    <label className="field-label span-two">Imagem por URL<input type="url" value={novoItem.imagem.startsWith("data:") ? "" : novoItem.imagem} onChange={(e) => setNovoItem((atual) => ({ ...atual, imagem: e.target.value }))} placeholder="https://..." /></label>
+                    <label className="field-label">
+                      Título
+                      <input
+                        required
+                        value={rascunhoItem.titulo}
+                        onChange={(evento) =>
+                          setRascunhoItem((atual) =>
+                            atual ? { ...atual, titulo: evento.target.value } : atual,
+                          )
+                        }
+                        placeholder="Ex.: Foto no corredor norte"
+                      />
+                    </label>
+                    <label className="field-label">
+                      Tipo
+                      <select
+                        value={rascunhoItem.categoria}
+                        onChange={(evento) =>
+                          setRascunhoItem((atual) =>
+                            atual
+                              ? {
+                                  ...atual,
+                                  categoria: evento.target.value as ItemAcervo["categoria"],
+                                }
+                              : atual,
+                          )
+                        }
+                      >
+                        <option>Fotografia</option>
+                        <option>Documento</option>
+                        <option>Pista</option>
+                      </select>
+                    </label>
+                    <label className="field-label span-two">
+                      Descrição
+                      <textarea
+                        value={rascunhoItem.descricao}
+                        onChange={(evento) =>
+                          setRascunhoItem((atual) =>
+                            atual ? { ...atual, descricao: evento.target.value } : atual,
+                          )
+                        }
+                        placeholder="O que os investigadores encontram?"
+                      />
+                    </label>
+                    <label className="field-label span-two">
+                      Imagem por URL
+                      <input
+                        type="url"
+                        value={rascunhoItem.imagem.startsWith("data:") ? "" : rascunhoItem.imagem}
+                        onChange={(evento) =>
+                          setRascunhoItem((atual) =>
+                            atual ? { ...atual, imagem: evento.target.value } : atual,
+                          )
+                        }
+                        placeholder="https://..."
+                      />
+                    </label>
                     <label className="upload-field span-two">ou escolha um arquivo local<input type="file" accept="image/*" onChange={carregarImagem} /><span>JPG, PNG ou WEBP · até 1,2 MB</span></label>
                   </div>
-                  <div className="form-actions"><span>Será criado oculto para os jogadores.</span><button className="primary-button" type="submit">Salvar no acervo <span>↗</span></button></div>
+                  {rascunhoItem.imagem.startsWith("data:") && (
+                    <div className="archive-image-status">
+                      Imagem local anexada
+                      <button
+                        type="button"
+                        className="plot-edit-button"
+                        onClick={() =>
+                          setRascunhoItem((atual) => (atual ? { ...atual, imagem: "" } : atual))
+                        }
+                      >
+                        Remover imagem
+                      </button>
+                    </div>
+                  )}
+                  <div className="form-actions">
+                    <span>
+                      {rascunhoItem.id
+                        ? "A visibilidade atual será mantida."
+                        : "O novo item começa bloqueado nesta tela e para os jogadores."}
+                    </span>
+                    <button className="primary-button" type="submit">
+                      {rascunhoItem.id ? "Salvar alterações" : "Salvar no acervo"} <span>↗</span>
+                    </button>
+                  </div>
                 </form>
               )}
               {itensVisiveis.length > 0 ? (
                 <div className="archive-grid">
                   {itensVisiveis.map((item, index) => (
-                    <article className={`archive-card ${!item.revelado ? "archive-hidden" : ""}`} key={item.id}>
-                      <div className={`archive-cover cover-${index % 4}`} style={item.imagem ? { backgroundImage: `linear-gradient(180deg, rgba(10,12,10,.05), rgba(10,12,10,.48)), url("${item.imagem}")` } : undefined}>
-                        {!item.imagem && <><span className="cover-glyph">{item.categoria === "Fotografia" ? "▧" : item.categoria === "Documento" ? "≋" : "†"}</span><span className="cover-caption">{item.categoria === "Fotografia" ? "NEGATIVO · 35 MM" : item.categoria === "Documento" ? "PAPEL RECUPERADO" : "EVIDÊNCIA · NÍVEL 02"}</span></>}
-                        <span className="archive-type">{item.categoria}</span>
-                      </div>
-                      <div className="archive-details"><div className="archive-title-row"><h3>{item.titulo}</h3><span className="archive-index">#{String(index + 1).padStart(2, "0")}</span></div><p>{item.descricao}</p>
-                        {modoMestre && <button className={`reveal-button archive-reveal ${item.revelado ? "is-visible" : ""}`} onClick={() => alternarRevelacaoItem(item.id)}><span>{item.revelado ? "◉" : "⊘"}</span>{item.revelado ? "Liberado para jogadores" : "Oculto · só mestre"}</button>}
-                        {!modoMestre && <span className="shared-label"><i /> MATERIAL COMPARTILHADO</span>}
-                      </div>
+                    <article
+                      className={`archive-card ${modoMestre && !item.revelado ? "archive-hidden" : ""}`}
+                      key={item.id}
+                    >
+                      {modoMestre && !item.revelado ? (
+                        <>
+                          <div className="archive-cover archive-cover-blocked">
+                            <span className="cover-glyph">⊘</span>
+                            <span className="archive-type">BLOQUEADO</span>
+                          </div>
+                          <div className="archive-details">
+                            <div className="archive-locked-copy">
+                              <strong>Conteúdo ocultado nesta tela</strong>
+                              <p>O material está bloqueado para a transmissão.</p>
+                            </div>
+                            <div className="archive-hidden-actions">
+                              <button
+                                className="archive-unlock-button"
+                                type="button"
+                                onClick={() => alternarRevelacaoItem(item.id)}
+                                aria-label="Reexibir conteúdo nesta tela e para os jogadores"
+                              >
+                                <span>◉</span> Reexibir material
+                              </button>
+                              <button
+                                className="plot-delete-button"
+                                type="button"
+                                onClick={() => removerItemAcervo(item.id)}
+                                aria-label="Excluir item do acervo"
+                                title="Excluir item do acervo"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            className={`archive-cover cover-${index % 4}`}
+                            style={
+                              item.imagem
+                                ? {
+                                    backgroundImage: `linear-gradient(180deg, rgba(10,12,10,.05), rgba(10,12,10,.48)), url("${item.imagem}")`,
+                                  }
+                                : undefined
+                            }
+                          >
+                            {!item.imagem && (
+                              <>
+                                <span className="cover-glyph">
+                                  {item.categoria === "Fotografia"
+                                    ? "▧"
+                                    : item.categoria === "Documento"
+                                      ? "≋"
+                                      : "†"}
+                                </span>
+                                <span className="cover-caption">
+                                  {item.categoria === "Fotografia"
+                                    ? "NEGATIVO · 35 MM"
+                                    : item.categoria === "Documento"
+                                      ? "PAPEL RECUPERADO"
+                                      : "EVIDÊNCIA · NÍVEL 02"}
+                                </span>
+                              </>
+                            )}
+                            <span className="archive-type">{item.categoria}</span>
+                          </div>
+                          <div className="archive-details">
+                            <div className="archive-title-row">
+                              <h3>{item.titulo}</h3>
+                              <span className="archive-index">#{String(index + 1).padStart(2, "0")}</span>
+                            </div>
+                            <p>{item.descricao}</p>
+                            <div className="archive-card-actions">
+                              <button
+                                className="archive-action-button"
+                                type="button"
+                                onClick={() => setItemVisualizadoId(item.id)}
+                              >
+                                Visualizar
+                              </button>
+                              {modoMestre && (
+                                <>
+                                  <button
+                                    className="archive-action-button"
+                                    type="button"
+                                    onClick={() => editarItem(item)}
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className={`plot-eye-button ${item.revelado ? "is-visible" : ""}`}
+                                    type="button"
+                                    onClick={() => alternarRevelacaoItem(item.id)}
+                                    aria-label="Bloquear conteúdo nesta tela e para os jogadores"
+                                    title="Bloquear conteúdo nesta tela e para os jogadores"
+                                  >
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                      <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" />
+                                      <circle cx="12" cy="12" r="2.5" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    className="plot-delete-button"
+                                    type="button"
+                                    onClick={() => removerItemAcervo(item.id)}
+                                    aria-label="Excluir item do acervo"
+                                    title="Excluir item do acervo"
+                                  >
+                                    ×
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                            {!modoMestre && (
+                              <span className="shared-label"><i /> MATERIAL COMPARTILHADO</span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </article>
                   ))}
                 </div>
@@ -1614,6 +2282,55 @@ export default function Home() {
               {modoMestre && <section className="master-secret"><p className="eyebrow">SEGREDO DO MESTRE</p><p>{rascunhoPessoa.segredoMestre}</p></section>}
             </section>
           )}
+        </div>
+      )}
+
+      {itemVisualizado && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(evento) => {
+            if (evento.target === evento.currentTarget) setItemVisualizadoId(null);
+          }}
+        >
+          <section
+            className="edit-modal archive-preview-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="archive-preview-title"
+          >
+            <div className="form-heading">
+              <div>
+                <p className="eyebrow">PRÉ-VISUALIZAÇÃO · {itemVisualizado.categoria}</p>
+                <h2 id="archive-preview-title">{itemVisualizado.titulo}</h2>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                onClick={() => setItemVisualizadoId(null)}
+                aria-label="Fechar visualização"
+              >
+                ×
+              </button>
+            </div>
+            {itemVisualizado.imagem && (
+              <div
+                className="archive-preview-image"
+                role="img"
+                aria-label={itemVisualizado.titulo}
+                style={{ backgroundImage: `url("${itemVisualizado.imagem}")` }}
+              />
+            )}
+            <p className="archive-preview-description">
+              {itemVisualizado.descricao || "Este item não possui descrição."}
+            </p>
+            {modoMestre && (
+              <span className="archive-preview-status">
+                {itemVisualizado.revelado
+                  ? "LIBERADO PARA JOGADORES"
+                  : "BLOQUEADO NESTA TELA"}
+              </span>
+            )}
+          </section>
         </div>
       )}
     </main>
